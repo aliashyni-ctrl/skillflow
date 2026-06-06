@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>SkillFlow — социальная сеть навыков</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        :root {
+            --primary: #0a2b3c;
+            --primary-light: #1a4a6f;
+            --bg: #f0f4f8;
+            --card: #ffffff;
+            --text: #1e293b;
+            --text-secondary: #64748b;
+            --accent: #3b82f6;
+            --danger: #ef4444;
+            --radius: 1.5rem;
+            --shadow: 0 4px 12px rgba(0,0,0,0.05);
+            --transition: 0.2s ease;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',system-ui,-apple-system,sans-serif; }
+        body { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); min-height:100vh; display:flex; justify-content:center; align-items:flex-start; }
+        #root { width:100%; min-height:100vh; display:flex; flex-direction:column; align-items:center; }
+        .app-container { width:100%; background:var(--bg); min-height:100vh; box-shadow:0 0 40px rgba(0,0,0,0.4); display:flex; flex-direction:column; }
+        .feed { flex:1; overflow-y:auto; padding:1rem 1.5rem 5rem; }
+        @media(max-width:600px){ .feed{padding:1rem 1rem 5rem;} .nav-item span{display:none;} .nav-item i{font-size:1.8rem;} }
+        .post-card { background:var(--card); border-radius:var(--radius); padding:1rem; margin-bottom:1rem; box-shadow:var(--shadow); animation:fadeIn 0.3s; }
+        @keyframes fadeIn{ from{opacity:0;transform:translateY(10px);} to{opacity:1;transform:translateY(0);} }
+        .post-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:0.8rem; }
+        .post-author { display:flex; align-items:center; gap:0.5rem; cursor:pointer; }
+        .post-avatar { width:36px; height:36px; border-radius:50%; object-fit:cover; border:2px solid var(--primary-light); }
+        .post-title { font-size:1.1rem; font-weight:700; margin:0.5rem 0; color:var(--text); }
+        .post-hashtags { font-size:0.8rem; color:var(--accent); margin-bottom:0.5rem; cursor:pointer; }
+        .post-content { margin:0.5rem 0; line-height:1.5; color:#334155; }
+        .post-actions { display:flex; gap:1.2rem; margin-top:0.8rem; font-size:0.85rem; color:var(--text-secondary); }
+        .like-btn,.comments-toggle,.bookmark-btn { background:none; border:none; cursor:pointer; display:flex; align-items:center; gap:0.3rem; padding:0.2rem 0.5rem; border-radius:1rem; transition:all var(--transition); }
+        .like-btn:hover,.comments-toggle:hover,.bookmark-btn:hover { background:#f1f5f9; }
+        .like-btn.active { color:#e0245e; }
+        .bookmark-btn.active { color:#f59e0b; }
+        .comment-section { margin-top:0.8rem; border-top:1px solid #e2e8f0; padding-top:0.8rem; }
+        .comment-list { max-height:200px; overflow-y:auto; margin-bottom:0.5rem; }
+        .comment-item { font-size:0.8rem; padding:0.4rem 0; border-bottom:1px solid #f1f5f9; display:flex; justify-content:space-between; align-items:center; }
+        .comment-author { font-weight:600; margin-right:0.4rem; color:var(--primary); }
+        .comment-form { display:flex; gap:0.4rem; margin-top:0.5rem; }
+        .comment-form input { flex:1; padding:0.5rem 0.8rem; border:1px solid #cbd5e1; border-radius:1.5rem; font-size:0.8rem; outline:none; }
+        .comment-form input:focus { border-color:var(--primary); }
+        .comment-form button { background:var(--primary); color:white; border:none; padding:0.5rem 1rem; border-radius:1.5rem; cursor:pointer; font-weight:600; }
+        .bottom-nav { background:rgba(255,255,255,0.95); backdrop-filter:blur(10px); border-top:1px solid #e2e8f0; display:flex; justify-content:space-around; padding:0.6rem 0.2rem; position:fixed; bottom:0; left:0; width:100%; z-index:100; }
+        .nav-item { display:flex; flex-direction:column; align-items:center; background:none; border:none; font-size:0.65rem; color:var(--text-secondary); cursor:pointer; padding:0.5rem; border-radius:1rem; transition:all var(--transition); position:relative; }
+        .nav-item i { font-size:1.5rem; }
+        .nav-item.active { color:var(--primary); font-weight:600; background:rgba(10,43,60,0.08); }
+        .badge { position:absolute; top:0; right:5px; background:var(--danger); color:white; border-radius:50%; width:18px; height:18px; font-size:0.65rem; display:flex; align-items:center; justify-content:center; }
+        .profile-view { text-align:center; padding:2rem 1rem; animation:fadeIn 0.3s; }
+        .profile-view img { width:120px; height:120px; border-radius:50%; object-fit:cover; margin-bottom:1rem; border:4px solid var(--primary-light); }
+        .profile-nickname { font-size:1.4rem; font-weight:700; margin-bottom:0.3rem; }
+        .profile-description { color:var(--text-secondary); margin-bottom:1rem; }
+        .stats { display:flex; justify-content:space-around; margin:1.5rem 0; background:white; padding:1rem; border-radius:var(--radius); box-shadow:var(--shadow); }
+        .stat-value { font-size:1.8rem; font-weight:800; color:var(--primary); }
+        .stat-label { font-size:0.8rem; color:var(--text-secondary); }
+        .btn { background:var(--primary); color:white; border:none; padding:0.7rem 1.8rem; border-radius:2rem; font-weight:600; cursor:pointer; font-size:0.9rem; transition:all var(--transition); display:inline-flex; align-items:center; gap:0.4rem; }
+        .btn:hover { background:#1e405b; transform:translateY(-1px); }
+        .btn-secondary { background:#e2e8f0; color:var(--text); }
+        .btn-secondary:hover { background:#cbd5e1; }
+        .modal-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(5px); display:flex; align-items:center; justify-content:center; z-index:1000; padding:1rem; animation:fadeIn 0.2s; }
+        .modal-content { background:white; border-radius:2rem; width:100%; max-width:480px; max-height:85vh; overflow-y:auto; padding:2rem; box-shadow:0 20px 40px rgba(0,0,0,0.3); animation:slideUp 0.3s; }
+        @keyframes slideUp{ from{transform:translateY(20px);opacity:0;} to{transform:translateY(0);opacity:1;} }
+        .form-group { margin-bottom:1.2rem; }
+        .form-group label { font-weight:600; display:block; margin-bottom:0.3rem; color:var(--text); }
+        .form-group input,.form-group textarea,.form-group select { width:100%; padding:0.8rem 1rem; border:2px solid #e2e8f0; border-radius:1.5rem; font-size:0.95rem; outline:none; transition:border-color var(--transition); }
+        .form-group input:focus,.form-group textarea:focus { border-color:var(--primary); }
+        .toast-notification { position:fixed; bottom:90px; left:50%; transform:translateX(-50%); background:#e6f7e6; color:#2e6b2e; padding:0.8rem 1.8rem; border-radius:2rem; z-index:1100; font-weight:600; box-shadow:0 5px 15px rgba(0,0,0,0.2); animation:slideUp 0.3s; }
+        .loader-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; z-index:2000; }
+        .loader-card { background:white; border-radius:2rem; padding:2rem 3rem; text-align:center; }
+        .spinner { width:50px; height:50px; border:5px solid #e2e8f0; border-top:5px solid var(--primary); border-radius:50%; animation:spin 0.8s linear infinite; }
+        @keyframes spin{ 0%{transform:rotate(0deg);} 100%{transform:rotate(360deg);} }
+        .load-more-sentinel { height:1px; }
+        .empty-feed { text-align:center; margin-top:4rem; color:var(--text-secondary); font-size:1rem; opacity:0.8; }
+        .error-feed { text-align:center; margin-top:4rem; color:var(--danger); }
+        .auth-card { width:100%; max-width:400px; margin:2rem auto; background:white; border-radius:2rem; overflow:hidden; box-shadow:0 25px 50px rgba(0,0,0,0.3); }
+        .auth-header { background:linear-gradient(135deg,var(--primary),var(--primary-light)); padding:2rem; color:white; text-align:center; }
+        .auth-header h1 { font-size:2rem; margin-bottom:0.3rem; }
+        .auth-tabs { display:flex; border-bottom:1px solid #e2e8f0; }
+        .auth-tab { flex:1; background:none; border:none; padding:1rem; font-weight:600; color:var(--text-secondary); cursor:pointer; transition:all var(--transition); }
+        .auth-tab.active { color:var(--primary); border-bottom:3px solid var(--primary); }
+        .auth-body { padding:2rem; }
+        .search-header { background:linear-gradient(135deg,var(--primary),var(--primary-light)); padding:1.2rem; color:white; position:sticky; top:0; z-index:10; display:flex; align-items:center; gap:1rem; }
+        .search-box { background:white; border-radius:2rem; padding:0.5rem 1rem; display:flex; align-items:center; gap:0.5rem; flex:1; }
+        .search-box input { border:none; flex:1; outline:none; font-size:0.9rem; }
+        .feed-tabs { display:flex; gap:0.5rem; margin-bottom:1rem; overflow-x:auto; }
+        .feed-tab { padding:0.4rem 1rem; border-radius:2rem; background:white; border:1px solid #cbd5e1; font-size:0.8rem; cursor:pointer; white-space:nowrap; }
+        .feed-tab.active { background:var(--primary); color:white; border-color:var(--primary); }
+    </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+    // ==================== НАСТРОЙКИ SUPABASE ====================
+    const SUPABASE_URL = 'https://odufzcucuobyhgrezqdt.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_T-29Zv4Z-vbG914sQWpmVw_kR7D-7_U';
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const STORAGE_BUCKET = 'avatars';
+
+    // ==================== ГЛОБАЛЬНОЕ СОСТОЯНИЕ ====================
+    let currentUser = null;
+    let activeTab = 'all';
+    let searchQuery = '';
+    let followedIds = [];
+    let isLoading = false;
+    let lastFeedTab = 'all';
+    let sentinelObserver = null;
+
+    const feedCache = {
+        all: { posts:[], lastCreatedAt:null, hasMore:true, likedSet:new Set(), bookmarkedSet:new Set(), error:false },
+        subscriptions: { posts:[], lastCreatedAt:null, hasMore:true, likedSet:new Set(), bookmarkedSet:new Set(), error:false },
+        popular: { posts:[], lastCreatedAt:null, hasMore:true, likedSet:new Set(), bookmarkedSet:new Set(), error:false },
+        bookmarks: { posts:[], lastCreatedAt:null, hasMore:true, likedSet:new Set(), bookmarkedSet:new Set(), error:false }
+    };
+    let currentState = feedCache[activeTab];
+    let unreadNotifications = 0;
+
+    // ==================== УТИЛИТЫ ====================
+    let loaderTimeout;
+    function showLoader() {
+        if (loaderTimeout) clearTimeout(loaderTimeout);
+        let loader = document.getElementById('globalLoader');
+        if (!loader) {
+            loader = document.createElement('div');
+            loader.id = 'globalLoader';
+            loader.className = 'loader-overlay';
+            loader.innerHTML = `<div class="loader-card"><div class="spinner"></div><p>Загрузка...</p></div>`;
+            document.body.appendChild(loader);
+        }
+        loader.style.display = 'flex';
+        loaderTimeout = setTimeout(() => hideLoader(), 5000);
+    }
+    function hideLoader() {
+        const loader = document.getElementById('globalLoader');
+        if (loader) loader.style.display = 'none';
+        if (loaderTimeout) clearTimeout(loaderTimeout);
+    }
+    function showToast(msg, isError = false) {
+        const toast = document.createElement('div');
+        toast.className = 'toast-notification';
+        toast.style.background = isError ? '#fee2e2' : '#e6f7e6';
+        toast.style.color = isError ? '#b91c1c' : '#2e6b2e';
+        toast.innerHTML = msg;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[m]));
+    }
+    function formatHashtags(input) {
+        return input.split(/\s+/).filter(Boolean).map(word => word.startsWith('#') ? word : `#${word}`).join(' ');
+    }
+
+    // ==================== СЕССИЯ ====================
+    function getSession() {
+        try { return JSON.parse(localStorage.getItem('skillflow_session')); } catch(e) { return null; }
+    }
+    function setSession(user) {
+        localStorage.setItem('skillflow_session', JSON.stringify(user));
+        currentUser = user;
+    }
+    function clearSession() {
+        localStorage.removeItem('skillflow_session');
+        currentUser = null;
+    }
+
+    // ==================== API ====================
+    const api = {
+        getUserLikes: async (userId, postIds) => {
+            if (!postIds.length) return new Set();
+            try {
+                const { data } = await sb.from('post_likes').select('post_id').eq('user_id', userId).in('post_id', postIds);
+                return new Set(data?.map(l => l.post_id) || []);
+            } catch(e) { return new Set(); }
+        },
+        getUserBookmarks: async (userId, postIds) => {
+            if (!postIds.length) return new Set();
+            try {
+                const { data } = await sb.from('bookmarks').select('post_id').eq('user_id', userId).in('post_id', postIds);
+                return new Set(data?.map(b => b.post_id) || []);
+            } catch(e) { return new Set(); }
+        },
+        toggleLike: async (postId, userId) => {
+            const { data: existing } = await sb.from('post_likes').select('id').eq('post_id', postId).eq('user_id', userId).maybeSingle();
+            if (existing) {
+                await sb.from('post_likes').delete().eq('id', existing.id);
+                return false;
+            } else {
+                await sb.from('post_likes').insert({ post_id: postId, user_id: userId });
+                return true;
+            }
+        },
+        toggleBookmark: async (postId, userId) => {
+            const { data: existing } = await sb.from('bookmarks').select('id').eq('post_id', postId).eq('user_id', userId).maybeSingle();
+            if (existing) {
+                await sb.from('bookmarks').delete().eq('id', existing.id);
+                return false;
+            } else {
+                await sb.from('bookmarks').insert({ post_id: postId, user_id: userId });
+                return true;
+            }
+        },
+        getComments: async (postId) => {
+            try {
+                const { data } = await sb.from('comments').select('*, users(nickname, avatar_url)').eq('post_id', postId).order('created_at', { ascending: true });
+                return data || [];
+            } catch(e) { return []; }
+        },
+        addComment: async (postId, userId, content) => {
+            await sb.from('comments').insert({ post_id: postId, user_id: userId, content });
+        },
+        deleteComment: async (commentId) => {
+            await sb.from('comments').delete().eq('id', commentId);
+        },
+        followUser: async (followerId, followingId) => {
+            await sb.from('follows').insert({ follower_id: followerId, following_id: followingId });
+        },
+        unfollowUser: async (followerId, followingId) => {
+            await sb.from('follows').delete().eq('follower_id', followerId).eq('following_id', followingId);
+        },
+        isFollowing: async (followerId, followingId) => {
+            try {
+                const { data } = await sb.from('follows').select('id').eq('follower_id', followerId).eq('following_id', followingId).maybeSingle();
+                return !!data;
+            } catch(e) { return false; }
+        },
+        getFollowedIds: async (userId) => {
+            try {
+                const { data } = await sb.from('follows').select('following_id').eq('follower_id', userId);
+                return data?.map(f => f.following_id) || [];
+            } catch(e) { return []; }
+        },
+        getUserStats: async (userId) => {
+            try {
+                const { data } = await sb.rpc('get_user_stats', { user_id: userId });
+                return (data && data.length > 0) ? data[0] : { posts_count: 0, total_likes: 0, total_views: 0 };
+            } catch(e) { return { posts_count: 0, total_likes: 0, total_views: 0 }; }
+        },
+        getUserPosts: async (userId, limit=10) => {
+            try {
+                const { data } = await sb.from('posts').select('*').eq('author_id', userId).order('created_at', { ascending: false }).limit(limit);
+                return data || [];
+            } catch(e) { return []; }
+        },
+        createPost: async (post) => {
+            const { data } = await sb.from('posts').insert([post]).select();
+            return data?.[0];
+        },
+        updatePost: async (id, updates) => {
+            await sb.from('posts').update(updates).eq('id', id);
+        },
+        deletePost: async (id) => {
+            await sb.from('posts').delete().eq('id', id);
+        },
+        uploadAvatar: async (file) => {
+            const ext = file.name.split('.').pop();
+            const name = `${Date.now()}_${Math.random().toString(36).substring(2,8)}.${ext}`;
+            await sb.storage.from(STORAGE_BUCKET).upload(name, file);
+            const { data } = sb.storage.from(STORAGE_BUCKET).getPublicUrl(name);
+            return data.publicUrl;
+        },
+        getNotifications: async (userId) => {
+            try {
+                const { data } = await sb.from('notifications').select('*, from_user:from_user_id(nickname, avatar_url), post:post_id(title)').eq('user_id', userId).order('created_at', { ascending: false }).limit(30);
+                return data || [];
+            } catch(e) { return []; }
+        },
+        markNotificationsRead: async (userId) => {
+            try { await sb.from('notifications').update({ read: true }).eq('user_id', userId).eq('read', false); } catch(e) {}
+        },
+        incrementView: async (postId) => {
+            try { await sb.rpc('increment_views', { post_id: postId }); } catch(e) {}
+        }
+    };
+
+    // ==================== ЗАГРУЗКА ПОСТОВ ====================
+    async function loadPosts(reset = true) {
+        if (isLoading) return;
+        isLoading = true;
+
+        if (reset) {
+            if (currentState.posts.length > 0 && !currentState.error) {
+                renderFreshFeed();
+                isLoading = false;
+                return;
+            }
+            currentState.posts = [];
+            currentState.lastCreatedAt = null;
+            currentState.hasMore = true;
+            currentState.error = false;
+        }
+
+        showLoader();
+        try {
+            let query = sb.from('posts').select('*, users(nickname, avatar_url)');
+
+            if (activeTab === 'subscriptions') {
+                if (!followedIds.length) {
+                    currentState.hasMore = false;
+                    isLoading = false;
+                    hideLoader();
+                    renderFreshFeed();
+                    return;
+                }
+                query = query.in('author_id', followedIds);
+            } else if (activeTab === 'popular') {
+                query = query.order('views', { ascending: false });
+            } else if (activeTab === 'bookmarks') {
+                const { data: bookIds } = await sb.from('bookmarks').select('post_id').eq('user_id', currentUser.id);
+                const ids = bookIds?.map(b => b.post_id) || [];
+                if (!ids.length) {
+                    currentState.hasMore = false;
+                    currentState.posts = [];
+                    isLoading = false;
+                    hideLoader();
+                    renderFreshFeed();
+                    return;
+                }
+                query = query.in('id', ids);
+            }
+
+            if (activeTab !== 'popular' && activeTab !== 'bookmarks') {
+                query = query.order('created_at', { ascending: false });
+            }
+            if (currentState.lastCreatedAt && !reset && activeTab !== 'popular' && activeTab !== 'bookmarks') {
+                query = query.lt('created_at', currentState.lastCreatedAt);
+            }
+            query = query.limit(5);
+
+            const { data, error } = await query;
+            if (error) throw error;
+
+            if (!data || data.length === 0) {
+                currentState.hasMore = false;
+            } else {
+                if (reset) currentState.posts = data;
+                else {
+                    const newPosts = data.filter(np => !currentState.posts.some(p => p.id === np.id));
+                    currentState.posts.push(...newPosts);
+                }
+                if (activeTab !== 'popular' && activeTab !== 'bookmarks' && data.length) {
+                    currentState.lastCreatedAt = data[data.length-1]?.created_at;
+                }
+            }
+
+            const allIds = currentState.posts.map(p => p.id);
+            if (allIds.length) {
+                const [liked, bookmarked] = await Promise.all([
+                    api.getUserLikes(currentUser.id, allIds),
+                    api.getUserBookmarks(currentUser.id, allIds)
+                ]);
+                currentState.likedSet = liked;
+                currentState.bookmarkedSet = bookmarked;
+                currentState.posts.forEach(p => {
+                    p.userLiked = liked.has(p.id);
+                    p.userBookmarked = bookmarked.has(p.id);
+                });
+            }
+
+            if (reset) renderFreshFeed();
+            else appendPostsToFeed(data || []);
+        } catch (err) {
+            console.error(err);
+            currentState.hasMore = false;
+            currentState.error = true;
+            renderFreshFeed();
+        } finally {
+            hideLoader();
+            isLoading = false;
+        }
+    }
+
+    function renderPostHTML(post) {
+        const avatarSrc = post.users?.avatar_url || '';
+        return `
+            <div class="post-card" data-id="${post.id}">
+                <div class="post-header">
+                    <div class="post-author" data-user="${post.author_id}">
+                        <img src="${avatarSrc}" class="post-avatar" onerror="this.style.display='none'">
+                        <strong>${escapeHtml(post.users?.nickname)}</strong>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                        <span style="font-size:0.7rem; color:var(--text-secondary)">${new Date(post.created_at).toLocaleDateString()}</span>
+                        ${post.author_id === currentUser?.id ? `
+                            <button class="edit-post" data-id="${post.id}" style="background:none; border:none; cursor:pointer; color:var(--text-secondary)"><i class="fas fa-pen"></i></button>
+                            <button class="delete-post" data-id="${post.id}" style="background:none; border:none; cursor:pointer; color:var(--danger)"><i class="fas fa-trash"></i></button>
+                        ` : ''}
+                    </div>
+                </div>
+                <h3 class="post-title">${escapeHtml(post.title)}</h3>
+                <div class="post-hashtags">${escapeHtml(post.hashtags)}</div>
+                <div class="post-content">${post.content || ''}</div>
+                <div class="post-actions">
+                    <button class="like-btn ${post.userLiked ? 'active' : ''}" data-id="${post.id}"><i class="fas fa-heart"></i> <span class="like-count">${post.likes_count}</span></button>
+                    <button class="comments-toggle" data-id="${post.id}"><i class="fas fa-comment"></i> <span class="comment-count">${post.comments_count || 0}</span></button>
+                    <button class="bookmark-btn ${post.userBookmarked ? 'active' : ''}" data-id="${post.id}"><i class="fas fa-bookmark"></i></button>
+                    <span style="margin-left: auto; font-size:0.7rem; color:var(--text-secondary);"><i class="fas fa-eye"></i> ${post.views || 0}</span>
+                </div>
+                <div class="comment-section" id="comments-${post.id}" style="display:none;">
+                    <div class="comment-list" id="commentList-${post.id}"></div>
+                    <div class="comment-form"><input type="text" id="commentInput-${post.id}" placeholder="Написать комментарий..."><button data-id="${post.id}" class="add-comment"><i class="fas fa-paper-plane"></i></button></div>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderFreshFeed() {
+        const feedDiv = document.getElementById('feedContent');
+        if (!feedDiv) return;
+
+        if (currentState.error) {
+            feedDiv.innerHTML = `<div class="error-feed"><i class="fas fa-exclamation-triangle" style="font-size:2rem;"></i><p>Ошибка загрузки</p><button class="btn" onclick="retryLoad()"><i class="fas fa-redo"></i> Повторить</button></div>`;
+            return;
+        }
+
+        let filtered = currentState.posts.filter(p =>
+            p.title.toLowerCase().includes(searchQuery) || (p.hashtags && p.hashtags.toLowerCase().includes(searchQuery))
+        );
+
+        if (filtered.length === 0 && currentState.posts.length === 0 && !currentState.hasMore) {
+            let msg = 'Пока ничего нет';
+            if (activeTab === 'subscriptions') msg = 'Подпишитесь на пользователей, чтобы видеть их посты';
+            if (activeTab === 'bookmarks') msg = 'У вас пока нет закладок';
+            feedDiv.innerHTML = `<div class="empty-feed"><i class="far fa-newspaper" style="font-size:2rem;"></i><p>${msg}</p></div>`;
+            return;
+        }
+        if (filtered.length === 0 && searchQuery) {
+            feedDiv.innerHTML = `<div class="empty-feed">Ничего не найдено</div>`;
+            return;
+        }
+
+        feedDiv.innerHTML = filtered.map(post => renderPostHTML(post)).join('');
+        if (currentState.hasMore && !searchQuery) {
+            feedDiv.innerHTML += `<div id="loadMoreSentinel" class="load-more-sentinel"></div>`;
+            observeSentinel();
+        }
+        filtered.forEach(p => api.incrementView(p.id));
+    }
+
+    function appendPostsToFeed(newPosts) {
+        const feedDiv = document.getElementById('feedContent');
+        if (!feedDiv || !newPosts.length) return;
+        const sentinel = document.getElementById('loadMoreSentinel');
+        if (sentinel) sentinel.remove();
+        feedDiv.insertAdjacentHTML('beforeend', newPosts.map(post => renderPostHTML(post)).join(''));
+        if (currentState.hasMore && !searchQuery) {
+            feedDiv.insertAdjacentHTML('beforeend', `<div id="loadMoreSentinel" class="load-more-sentinel"></div>`);
+            observeSentinel();
+        }
+        newPosts.forEach(p => api.incrementView(p.id));
+    }
+
+    function observeSentinel() {
+        if (sentinelObserver) sentinelObserver.disconnect();
+        const sentinel = document.getElementById('loadMoreSentinel');
+        if (!sentinel) return;
+        sentinelObserver = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting && currentState.hasMore && !isLoading) {
+                loadPosts(false);
+            }
+        }, { rootMargin: '100px' });
+        sentinelObserver.observe(sentinel);
+    }
+
+    window.retryLoad = function() {
+        currentState.error = false;
+        loadPosts(true);
+    };
+
+    // ==================== ДЕЛЕГИРОВАНИЕ СОБЫТИЙ ====================
+    function setupFeedDelegation() {
+        const feedDiv = document.getElementById('feedContent');
+        if (!feedDiv) return;
+        feedDiv.removeEventListener('click', feedClickHandler);
+        feedDiv.addEventListener('click', feedClickHandler);
+    }
+
+    async function feedClickHandler(e) {
+        const target = e.target.closest('button, .post-author, .post-hashtags');
+        if (!target) return;
+
+        if (target.classList.contains('like-btn')) {
+            e.stopPropagation();
+            const id = target.dataset.id;
+            const post = currentState.posts.find(p => p.id === id);
+            if (!post) return;
+            try {
+                const newLiked = await api.toggleLike(id, currentUser.id);
+                post.likes_count += newLiked ? 1 : -1;
+                post.userLiked = newLiked;
+                const card = document.querySelector(`.post-card[data-id="${id}"]`);
+                if (card) card.outerHTML = renderPostHTML(post);
+            } catch (e) { showToast('Ошибка сети', true); }
+            return;
+        }
+
+        if (target.classList.contains('bookmark-btn')) {
+            e.stopPropagation();
+            const id = target.dataset.id;
+            const post = currentState.posts.find(p => p.id === id);
+            if (!post) return;
+            try {
+                const newBookmarked = await api.toggleBookmark(id, currentUser.id);
+                post.userBookmarked = newBookmarked;
+                target.classList.toggle('active', newBookmarked);
+            } catch (e) { showToast('Ошибка сети', true); }
+            return;
+        }
+
+        if (target.classList.contains('comments-toggle')) {
+            e.stopPropagation();
+            const id = target.dataset.id;
+            const section = document.getElementById(`comments-${id}`);
+            if (!section) return;
+            if (section.style.display === 'none') {
+                section.style.display = 'block';
+                await loadComments(id);
+            } else section.style.display = 'none';
+            return;
+        }
+
+        if (target.classList.contains('add-comment')) {
+            e.stopPropagation();
+            const id = target.dataset.id;
+            const input = document.getElementById(`commentInput-${id}`);
+            if (!input) return;
+            const content = input.value.trim();
+            if (!content) return;
+            try {
+                await api.addComment(id, currentUser.id, content);
+                input.value = '';
+                await loadComments(id);
+                const post = currentState.posts.find(p => p.id === id);
+                if (post) {
+                    post.comments_count = (post.comments_count || 0) + 1;
+                    const btn = document.querySelector(`.comments-toggle[data-id="${id}"]`);
+                    if (btn) {
+                        const countSpan = btn.querySelector('.comment-count');
+                        if (countSpan) countSpan.textContent = post.comments_count;
+                    }
+                }
+            } catch (e) { showToast('Ошибка сети', true); }
+            return;
+        }
+
+        if (target.classList.contains('edit-post')) {
+            e.stopPropagation();
+            const id = target.dataset.id;
+            const post = currentState.posts.find(p => p.id === id);
+            if (post) openArticleEditor(post);
+            return;
+        }
+
+        if (target.classList.contains('delete-post')) {
+            e.stopPropagation();
+            if (confirm('Удалить пост?')) {
+                try {
+                    await api.deletePost(target.dataset.id);
+                    showToast('Удалено');
+                    currentState.posts = currentState.posts.filter(p => p.id !== target.dataset.id);
+                    renderFreshFeed();
+                } catch (e) { showToast('Ошибка сети', true); }
+            }
+            return;
+        }
+
+        if (target.classList.contains('post-author')) {
+            e.stopPropagation();
+            const userId = target.dataset.user;
+            if (userId) showUserProfile(userId);
+            return;
+        }
+
+        if (target.classList.contains('post-hashtags')) {
+            e.stopPropagation();
+            const tag = target.textContent.trim();
+            if (tag) {
+                searchQuery = tag;
+                document.getElementById('globalSearch').value = tag;
+                renderFreshFeed();
+            }
+            return;
+        }
+    }
+
+    async function loadComments(postId) {
+        try {
+            const comments = await api.getComments(postId);
+            const container = document.getElementById(`commentList-${postId}`);
+            if (!container) return;
+            if (!comments.length) {
+                container.innerHTML = '<div class="comment-item">Нет комментариев</div>';
+                return;
+            }
+            container.innerHTML = comments.map(c => `
+                <div class="comment-item">
+                    <div><span class="comment-author">${escapeHtml(c.users?.nickname)}</span> ${escapeHtml(c.content)}</div>
+                    ${c.user_id === currentUser?.id ? `<button class="delete-comment" data-id="${c.id}" style="background:none; border:none; color:var(--danger);"><i class="fas fa-times"></i></button>` : ''}
+                </div>
+            `).join('');
+            container.onclick = async (e) => {
+                const delBtn = e.target.closest('.delete-comment');
+                if (!delBtn) return;
+                e.stopPropagation();
+                try {
+                    await api.deleteComment(delBtn.dataset.id);
+                    await loadComments(postId);
+                    const post = currentState.posts.find(p => p.id === postId);
+                    if (post && post.comments_count > 0) {
+                        post.comments_count--;
+                        const btn = document.querySelector(`.comments-toggle[data-id="${postId}"]`);
+                        if (btn) {
+                            const countSpan = btn.querySelector('.comment-count');
+                            if (countSpan) countSpan.textContent = post.comments_count;
+                        }
+                    }
+                } catch (e) { showToast('Ошибка сети', true); }
+            };
+        } catch (e) { console.error(e); }
+    }
+
+    // ==================== ПРОФИЛИ ====================
+    async function showUserProfile(userId) {
+        if (userId === currentUser.id) { showProfile(); return; }
+        showLoader();
+        try {
+            const { data: user } = await sb.from('users').select('*').eq('id', userId).single();
+            const stats = await api.getUserStats(userId);
+            const isFollow = await api.isFollowing(currentUser.id, userId);
+            const posts = await api.getUserPosts(userId);
+            let html = `
+                <div class="profile-view">
+                    <img src="${user.avatar_url || ''}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22%3E%3Crect width=%22100%22 height=%22100%22 fill=%22%23ddd%22/%3E%3C/svg%3E'">
+                    <h2>${escapeHtml(user.nickname)}</h2>
+                    <p>${escapeHtml(user.description || '')}</p>
+                    <div class="stats">
+                        <div><div class="stat-value">${stats.posts_count}</div><div class="stat-label">Постов</div></div>
+                        <div><div class="stat-value">${stats.total_likes}</div><div class="stat-label">Лайков</div></div>
+                        <div><div class="stat-value">${stats.total_views}</div><div class="stat-label">Просмотров</div></div>
+                    </div>
+                    <button id="followBtn" class="btn"><i class="fas ${isFollow ? 'fa-user-minus' : 'fa-user-plus'}"></i>${isFollow ? 'Отписаться' : 'Подписаться'}</button>
+                    <button id="backBtn" class="btn btn-secondary" style="margin-top:1rem;">Назад</button>
+                    <h3 style="margin-top:2rem;">Публикации</h3>
+                    <div id="profilePosts"></div>
+                </div>
+            `;
+            document.getElementById('feedContent').innerHTML = html;
+            const container = document.getElementById('profilePosts');
+            if (posts.length) {
+                container.innerHTML = posts.map(post => renderPostHTML({...post, users: user})).join('');
+            } else {
+                container.innerHTML = '<p>Нет публикаций</p>';
+            }
+            const followBtn = document.getElementById('followBtn');
+            if (followBtn) {
+                followBtn.onclick = async () => {
+                    try {
+                        if (isFollow) await api.unfollowUser(currentUser.id, userId);
+                        else await api.followUser(currentUser.id, userId);
+                        showUserProfile(userId);
+                    } catch (e) { showToast('Ошибка сети', true); }
+                };
+            }
+            const backBtn = document.getElementById('backBtn');
+            if (backBtn) backBtn.onclick = () => returnToFeed();
+        } catch (e) { showToast('Ошибка загрузки профиля', true); }
+        finally { hideLoader(); }
+    }
+
+    async function showProfile() {
+        showLoader();
+        try {
+            const stats = await api.getUserStats(currentUser.id);
+            const posts = await api.getUserPosts(currentUser.id);
+            let html = `
+                <div class="profile-view">
+                    <img src="${currentUser.avatar_url || ''}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22%3E%3Crect width=%22100%22 height=%22100%22 fill=%22%23ddd%22/%3E%3C/svg%3E'">
+                    <h2>${escapeHtml(currentUser.nickname)}</h2>
+                    <p>${escapeHtml(currentUser.description || '')}</p>
+                    <div class="stats">
+                        <div><div class="stat-value">${stats.posts_count}</div><div class="stat-label">Постов</div></div>
+                        <div><div class="stat-value">${stats.total_likes}</div><div class="stat-label">Лайков</div></div>
+                        <div><div class="stat-value">${stats.total_views}</div><div class="stat-label">Просмотров</div></div>
+                    </div>
+                    <button id="editProfileBtn" class="btn"><i class="fas fa-pen"></i> Редактировать</button>
+                    <button id="logoutBtn" class="btn btn-secondary" style="margin-top:1rem;">Выйти</button>
+                    <button id="backBtn" class="btn btn-secondary" style="margin-top:1rem;">Назад</button>
+                    <h3 style="margin-top:2rem;">Мои публикации</h3>
+                    <div id="profilePosts"></div>
+                </div>
+            `;
+            document.getElementById('feedContent').innerHTML = html;
+            const container = document.getElementById('profilePosts');
+            if (posts.length) {
+                container.innerHTML = posts.map(post => renderPostHTML({...post, users: currentUser})).join('');
+            } else {
+                container.innerHTML = '<p>У вас пока нет публикаций</p>';
+            }
+            const editBtn = document.getElementById('editProfileBtn');
+            if (editBtn) editBtn.onclick = showEditProfile;
+            const logoutBtn = document.getElementById('logoutBtn');
+            if (logoutBtn) logoutBtn.onclick = () => { clearSession(); renderAuth(); };
+            const backBtn = document.getElementById('backBtn');
+            if (backBtn) backBtn.onclick = () => returnToFeed();
+        } catch (e) { showToast('Ошибка', true); }
+        finally { hideLoader(); }
+    }
+
+    function returnToFeed() {
+        activeTab = lastFeedTab;
+        searchQuery = '';
+        const searchInput = document.getElementById('globalSearch');
+        if (searchInput) searchInput.value = '';
+        document.querySelectorAll('.feed-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.feed === activeTab));
+        currentState = feedCache[activeTab];
+        if (currentState.posts.length > 0) {
+            renderFreshFeed();
+            setupFeedDelegation();
+        } else {
+            loadPosts(true).then(() => setupFeedDelegation());
+        }
+        loadUnreadCount();
+    }
+
+    async function showEditProfile() {
+        document.getElementById('feedContent').innerHTML = `
+            <div class="profile-view">
+                <h3>Редактирование</h3>
+                <div class="form-group"><input type="text" id="editNick" value="${escapeHtml(currentUser.nickname)}" placeholder="Никнейм"></div>
+                <div class="form-group"><textarea id="editDesc">${escapeHtml(currentUser.description || '')}</textarea></div>
+                <div class="form-group"><input type="file" id="editAvatar" accept="image/*"></div>
+                <button id="saveProfileBtn" class="btn">Сохранить</button>
+                <button id="cancelProfileBtn" class="btn btn-secondary">Отмена</button>
+            </div>
+        `;
+        let selectedFile = null;
+        const avatarInput = document.getElementById('editAvatar');
+        if (avatarInput) avatarInput.onchange = e => selectedFile = e.target.files[0];
+        const saveBtn = document.getElementById('saveProfileBtn');
+        const cancelBtn = document.getElementById('cancelProfileBtn');
+        if (saveBtn) {
+            saveBtn.onclick = async () => {
+                const nickname = document.getElementById('editNick').value.trim();
+                const description = document.getElementById('editDesc').value.trim().slice(0,200);
+                if (!nickname || nickname.length<3) { showToast('Никнейм от 3 символов', true); return; }
+                let newAvatar = currentUser.avatar_url;
+                if (selectedFile) {
+                    try { newAvatar = await api.uploadAvatar(selectedFile); } catch(e) { showToast('Ошибка загрузки', true); return; }
+                }
+                const { data, error } = await sb.from('users').update({ nickname, description, avatar_url: newAvatar }).eq('id', currentUser.id).select().single();
+                if (error) { showToast(error.message, true); return; }
+                setSession(data);
+                showProfile();
+            };
+        }
+        if (cancelBtn) cancelBtn.onclick = showProfile;
+    }
+
+    // ==================== РЕДАКТОР СТАТЬИ ====================
+    function openArticleEditor(postToEdit = null) {
+        const isEdit = !!postToEdit;
+        const ed = document.createElement('div');
+        ed.className = 'modal-overlay';
+        ed.innerHTML = `
+            <div class="modal-content">
+                <h3>${isEdit ? 'Редактировать' : 'Новая статья'}</h3>
+                <div class="form-group"><input type="text" id="title" placeholder="Заголовок" value="${isEdit ? escapeHtml(postToEdit.title) : ''}"></div>
+                <div class="form-group"><input type="text" id="hashtags" placeholder="Введите слова (хэштеги)" value="${isEdit ? escapeHtml(postToEdit.hashtags) : ''}"></div>
+                <div id="editor" style="min-height:200px;"></div>
+                <button id="saveBtn" class="btn" style="margin-top:1rem;">${isEdit ? 'Сохранить' : 'Опубликовать'}</button>
+                <button id="cancelBtn" class="btn btn-secondary">Отмена</button>
+            </div>
+        `;
+        document.body.appendChild(ed);
+
+        const hashtagsInput = ed.querySelector('#hashtags');
+        if (hashtagsInput) {
+            hashtagsInput.addEventListener('blur', () => {
+                hashtagsInput.value = formatHashtags(hashtagsInput.value);
+            });
+        }
+
+        const quill = new Quill(ed.querySelector('#editor'), { theme: 'snow', placeholder: 'Текст статьи...' });
+        if (isEdit && postToEdit.content) quill.root.innerHTML = postToEdit.content;
+
+        ed.querySelector('#saveBtn').onclick = async () => {
+            const title = ed.querySelector('#title').value.trim();
+            let hashtags = hashtagsInput ? hashtagsInput.value.trim() : '';
+            hashtags = formatHashtags(hashtags);
+            const content = quill.root.innerHTML;
+            if (!title || !content) { showToast('Заполните заголовок и текст', true); return; }
+            try {
+                if (isEdit) await api.updatePost(postToEdit.id, { title, hashtags, content });
+                else await api.createPost({ author_id: currentUser.id, type: 'article', title, hashtags, content });
+                ed.remove();
+                currentState.posts = [];
+                currentState.lastCreatedAt = null;
+                currentState.hasMore = true;
+                await loadPosts(true);
+            } catch(e) { showToast('Ошибка публикации', true); }
+        };
+        ed.querySelector('#cancelBtn').onclick = () => ed.remove();
+    }
+
+    // ==================== УВЕДОМЛЕНИЯ ====================
+    async function showNotifications() {
+        showLoader();
+        try {
+            const notifs = await api.getNotifications(currentUser.id);
+            await api.markNotificationsRead(currentUser.id);
+            unreadNotifications = 0;
+            updateNotificationBadge();
+            let html = '<h3 style="margin:1rem;">Уведомления</h3>';
+            if (!notifs.length) html += '<p style="text-align:center;">Нет уведомлений</p>';
+            else {
+                notifs.forEach(n => {
+                    const from = n.from_user?.nickname || 'Пользователь';
+                    let msg = '';
+                    if (n.type === 'like') msg = `${from} оценил ваш пост`;
+                    else if (n.type === 'comment') msg = `${from} прокомментировал ваш пост`;
+                    else if (n.type === 'follow') msg = `${from} подписался на вас`;
+                    html += `<div class="post-card" style="padding:0.8rem;"><strong>${msg}</strong><br><small>${new Date(n.created_at).toLocaleString()}</small></div>`;
+                });
+            }
+            html += `<button class="btn btn-secondary" style="margin:1rem auto; display:block;" onclick="returnToFeed()">Назад</button>`;
+            document.getElementById('feedContent').innerHTML = html;
+        } catch (e) { showToast('Ошибка загрузки уведомлений', true); }
+        finally { hideLoader(); }
+    }
+
+    function updateNotificationBadge() {
+        const badge = document.getElementById('notifBadge');
+        if (badge) {
+            badge.textContent = unreadNotifications || '';
+            badge.style.display = unreadNotifications ? 'flex' : 'none';
+        }
+    }
+
+    async function loadUnreadCount() {
+        if (!currentUser) return;
+        try {
+            const { count } = await sb.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).eq('read', false);
+            unreadNotifications = count || 0;
+            updateNotificationBadge();
+        } catch (e) {}
+    }
+
+    // ==================== ИНИЦИАЛИЗАЦИЯ ====================
+    async function initFeed() {
+        if (!currentUser) return;
+        if (activeTab === 'subscriptions') followedIds = await api.getFollowedIds(currentUser.id);
+        currentState = feedCache[activeTab];
+        await loadPosts(true);
+        setupFeedDelegation();
+        loadUnreadCount();
+    }
+
+    function setActiveTab(tab) {
+        document.querySelectorAll('.feed-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.feed === tab));
+    }
+
+    function renderMainUI() {
+        document.getElementById('root').innerHTML = `
+            <div class="app-container">
+                <div class="search-header">
+                    <h2 style="font-size:1.5rem;"><i class="fas fa-graduation-cap"></i> SkillFlow</h2>
+                    <div class="search-box">
+                        <i class="fas fa-search" style="color:var(--primary);"></i>
+                        <input type="text" id="globalSearch" placeholder="Поиск...">
+                    </div>
+                    <div style="position:relative; cursor:pointer;" id="notifIcon">
+                        <i class="fas fa-bell" style="font-size:1.4rem;"></i>
+                        <span id="notifBadge" class="badge" style="display:none;"></span>
+                    </div>
+                </div>
+                <div class="feed" id="feedContent">
+                    <div class="feed-tabs">
+                        <button class="feed-tab active" data-feed="all">Все</button>
+                        <button class="feed-tab" data-feed="subscriptions">Подписки</button>
+                        <button class="feed-tab" data-feed="popular">Популярное</button>
+                        <button class="feed-tab" data-feed="bookmarks">Закладки</button>
+                    </div>
+                    <div id="postsContainer"></div>
+                </div>
+                <div class="bottom-nav">
+                    <button class="nav-item active" data-tab="all"><i class="fas fa-home"></i><span>Главная</span></button>
+                    <button class="nav-item" id="createBtn"><i class="fas fa-plus-circle"></i><span>Написать</span></button>
+                    <button class="nav-item" data-tab="profile"><i class="fas fa-user-circle"></i><span>Профиль</span></button>
+                </div>
+            </div>
+        `;
+
+        // табы ленты
+        document.querySelectorAll('.feed-tab').forEach(tab => {
+            tab.addEventListener('click', async () => {
+                const feedType = tab.dataset.feed;
+                if (!feedType) return;
+                setActiveTab(feedType);
+                activeTab = feedType;
+                lastFeedTab = feedType;
+                const searchInput = document.getElementById('globalSearch');
+                if (searchInput) searchInput.value = '';
+                searchQuery = '';
+                currentState = feedCache[activeTab];
+                await initFeed();
+            });
+        });
+
+        // нижняя навигация
+        document.querySelectorAll('.nav-item').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                if (btn.id === 'createBtn') return openArticleEditor(null);
+                const tab = btn.dataset.tab;
+                if (tab === 'profile') return showProfile();
+                if (tab === 'all') {
+                    setActiveTab('all');
+                    activeTab = 'all';
+                    lastFeedTab = 'all';
+                    const searchInput = document.getElementById('globalSearch');
+                    if (searchInput) searchInput.value = '';
+                    searchQuery = '';
+                    currentState = feedCache.all;
+                    await initFeed();
+                }
+            });
+        });
+
+        const searchInput = document.getElementById('globalSearch');
+        if (searchInput) {
+            searchInput.addEventListener('input', e => {
+                searchQuery = e.target.value.toLowerCase();
+                renderFreshFeed();
+            });
+        }
+
+        const notifIcon = document.getElementById('notifIcon');
+        if (notifIcon) notifIcon.addEventListener('click', showNotifications);
+
+        activeTab = 'all';
+        lastFeedTab = 'all';
+        currentState = feedCache.all;
+        initFeed();
+    }
+
+    function renderAuth() {
+        document.getElementById('root').innerHTML = `
+            <div class="auth-card">
+                <div class="auth-header"><h1>🎓 SkillFlow</h1><p>Социальная сеть навыков</p></div>
+                <div class="auth-tabs">
+                    <button class="auth-tab active" data-tab="login">Вход</button>
+                    <button class="auth-tab" data-tab="register">Регистрация</button>
+                </div>
+                <div id="loginPanel" class="auth-body">
+                    <div class="form-group"><input type="text" id="loginNick" placeholder="Ваш никнейм"></div>
+                    <button class="btn" id="doLogin" style="width:100%;"><i class="fas fa-sign-in-alt"></i> Войти</button>
+                </div>
+                <div id="registerPanel" class="auth-body" style="display:none;">
+                    <div class="form-group"><input type="text" id="regNick" placeholder="Никнейм (от 3 символов)"></div>
+                    <div class="form-group"><textarea id="regDesc" placeholder="О себе (до 200 символов)"></textarea></div>
+                    <div class="form-group"><label>Аватар</label><input type="file" id="regAvatar" accept="image/*"></div>
+                    <button class="btn" id="doRegister" style="width:100%;"><i class="fas fa-user-plus"></i> Создать профиль</button>
+                </div>
+            </div>
+        `;
+        let selectedAvatar = null;
+        const regAvatarInput = document.getElementById('regAvatar');
+        if (regAvatarInput) regAvatarInput.addEventListener('change', e => selectedAvatar = e.target.files[0]);
+        const loginBtn = document.getElementById('doLogin');
+        if (loginBtn) {
+            loginBtn.onclick = async () => {
+                const nick = document.getElementById('loginNick').value.trim();
+                if (!nick) return showToast('Введите никнейм', true);
+                try {
+                    const { data, error } = await sb.from('users').select('*').eq('nickname', nick).maybeSingle();
+                    if (error) throw error;
+                    if (!data) return showToast('Пользователь не найден', true);
+                    setSession(data);
+                    renderMainUI();
+                } catch (e) { showToast('Ошибка соединения', true); }
+            };
+        }
+        const registerBtn = document.getElementById('doRegister');
+        if (registerBtn) {
+            registerBtn.onclick = async () => {
+                const nick = document.getElementById('regNick').value.trim();
+                if (!nick || nick.length<3) return showToast('Никнейм от 3 символов', true);
+                const desc = document.getElementById('regDesc').value.trim().slice(0,200);
+                let avatarUrl = null;
+                if (selectedAvatar) {
+                    try { avatarUrl = await api.uploadAvatar(selectedAvatar); } catch(e) { return showToast('Ошибка загрузки', true); }
+                }
+                try {
+                    const { data, error } = await sb.from('users').insert([{ nickname: nick, avatar_url: avatarUrl, description: desc }]).select();
+                    if (error) return showToast(error.message, true);
+                    setSession(data[0]);
+                    renderMainUI();
+                } catch (e) { showToast('Ошибка соединения', true); }
+            };
+        }
+        document.querySelectorAll('.auth-tab').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.auth-tab').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const loginPanel = document.getElementById('loginPanel');
+                const registerPanel = document.getElementById('registerPanel');
+                if (loginPanel && registerPanel) {
+                    loginPanel.style.display = btn.dataset.tab === 'login' ? 'block' : 'none';
+                    registerPanel.style.display = btn.dataset.tab === 'register' ? 'block' : 'none';
+                }
+            });
+        });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+        const session = getSession();
+        if (session) {
+            currentUser = session;
+            renderMainUI();
+        } else {
+            renderAuth();
+        }
+    });
+</script>
+</body>
+</html>
