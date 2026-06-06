@@ -99,6 +99,10 @@
 <div id="root"></div>
 
 <script>
+    // Подавление предупреждения Quill про DOMNodeInserted
+    window.Quill = window.Quill || {};
+    window.Quill.DEBUG = 'error';
+
     // ==================== НАСТРОЙКИ SUPABASE ====================
     const SUPABASE_URL = 'https://odufzcucuobyhgrezqdt.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_T-29Zv4Z-vbG914sQWpmVw_kR7D-7_U';
@@ -173,7 +177,7 @@
         currentUser = null;
     }
 
-    // ==================== API ====================
+    // ==================== API (все вызовы защищены) ====================
     const api = {
         getUserLikes: async (userId, postIds) => {
             if (!postIds.length) return new Set();
@@ -811,7 +815,7 @@
         ed.querySelector('#cancelBtn').onclick = () => ed.remove();
     }
 
-    // ==================== УВЕДОМЛЕНИЯ ====================
+    // ==================== УВЕДОМЛЕНИЯ (без каскадных запросов) ====================
     async function showNotifications() {
         showLoader();
         try {
@@ -845,8 +849,12 @@
         }
     }
 
+    let notificationFetchTimer = null;
     async function loadUnreadCount() {
         if (!currentUser) return;
+        // Защита от слишком частых запросов при ошибках
+        if (notificationFetchTimer) return;
+        notificationFetchTimer = setTimeout(() => { notificationFetchTimer = null; }, 5000);
         try {
             const { count } = await sb.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).eq('read', false);
             unreadNotifications = count || 0;
@@ -899,7 +907,6 @@
             </div>
         `;
 
-        // табы ленты
         document.querySelectorAll('.feed-tab').forEach(tab => {
             tab.addEventListener('click', async () => {
                 const feedType = tab.dataset.feed;
@@ -915,7 +922,6 @@
             });
         });
 
-        // нижняя навигация
         document.querySelectorAll('.nav-item').forEach(btn => {
             btn.addEventListener('click', async () => {
                 if (btn.id === 'createBtn') return openArticleEditor(null);
