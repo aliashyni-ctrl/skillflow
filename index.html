@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>SkillFlow — социальная сеть навыков</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
-    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         :root {
@@ -93,16 +91,19 @@
         .feed-tabs { display:flex; gap:0.5rem; margin-bottom:1rem; overflow-x:auto; }
         .feed-tab { padding:0.4rem 1rem; border-radius:2rem; background:white; border:1px solid #cbd5e1; font-size:0.8rem; cursor:pointer; white-space:nowrap; }
         .feed-tab.active { background:var(--primary); color:white; border-color:var(--primary); }
+        /* Редактор */
+        .editor-toolbar { display:flex; gap:0.5rem; margin-bottom:0.5rem; }
+        .editor-toolbar button { background:#e2e8f0; border:none; border-radius:0.5rem; padding:0.4rem 0.7rem; cursor:pointer; font-size:0.9rem; }
+        .editor-toolbar button:hover { background:#cbd5e1; }
+        .editor-content { min-height:200px; border:2px solid #e2e8f0; border-radius:1rem; padding:0.8rem; outline:none; font-size:0.95rem; line-height:1.5; }
+        .editor-content:focus { border-color:var(--primary); }
+        .editor-preview { border:2px solid #e2e8f0; border-radius:1rem; padding:0.8rem; min-height:100px; background:#f8fafc; }
     </style>
 </head>
 <body>
 <div id="root"></div>
 
 <script>
-    // Подавление предупреждения Quill про DOMNodeInserted
-    window.Quill = window.Quill || {};
-    window.Quill.DEBUG = 'error';
-
     // ==================== НАСТРОЙКИ SUPABASE ====================
     const SUPABASE_URL = 'https://odufzcucuobyhgrezqdt.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_T-29Zv4Z-vbG914sQWpmVw_kR7D-7_U';
@@ -177,7 +178,7 @@
         currentUser = null;
     }
 
-    // ==================== API (все вызовы защищены) ====================
+    // ==================== API (защищённые вызовы) ====================
     const api = {
         getUserLikes: async (userId, postIds) => {
             if (!postIds.length) return new Set();
@@ -280,9 +281,6 @@
         },
         markNotificationsRead: async (userId) => {
             try { await sb.from('notifications').update({ read: true }).eq('user_id', userId).eq('read', false); } catch(e) {}
-        },
-        incrementView: async (postId) => {
-            try { await sb.rpc('increment_views', { post_id: postId }); } catch(e) {}
         }
     };
 
@@ -447,7 +445,6 @@
             feedDiv.innerHTML += `<div id="loadMoreSentinel" class="load-more-sentinel"></div>`;
             observeSentinel();
         }
-        filtered.forEach(p => api.incrementView(p.id));
     }
 
     function appendPostsToFeed(newPosts) {
@@ -460,7 +457,6 @@
             feedDiv.insertAdjacentHTML('beforeend', `<div id="loadMoreSentinel" class="load-more-sentinel"></div>`);
             observeSentinel();
         }
-        newPosts.forEach(p => api.incrementView(p.id));
     }
 
     function observeSentinel() {
@@ -769,7 +765,7 @@
         if (cancelBtn) cancelBtn.onclick = showProfile;
     }
 
-    // ==================== РЕДАКТОР СТАТЬИ ====================
+    // ==================== РЕДАКТОР СТАТЬИ (без Quill) ====================
     function openArticleEditor(postToEdit = null) {
         const isEdit = !!postToEdit;
         const ed = document.createElement('div');
@@ -779,7 +775,13 @@
                 <h3>${isEdit ? 'Редактировать' : 'Новая статья'}</h3>
                 <div class="form-group"><input type="text" id="title" placeholder="Заголовок" value="${isEdit ? escapeHtml(postToEdit.title) : ''}"></div>
                 <div class="form-group"><input type="text" id="hashtags" placeholder="Введите слова (хэштеги)" value="${isEdit ? escapeHtml(postToEdit.hashtags) : ''}"></div>
-                <div id="editor" style="min-height:200px;"></div>
+                <div class="editor-toolbar">
+                    <button type="button" data-command="bold"><b>B</b></button>
+                    <button type="button" data-command="italic"><i>I</i></button>
+                    <button type="button" data-command="underline"><u>U</u></button>
+                    <button type="button" data-command="insertUnorderedList">• Список</button>
+                </div>
+                <div class="editor-content" contenteditable="true" id="editorContent">${isEdit && postToEdit.content ? postToEdit.content : ''}</div>
                 <button id="saveBtn" class="btn" style="margin-top:1rem;">${isEdit ? 'Сохранить' : 'Опубликовать'}</button>
                 <button id="cancelBtn" class="btn btn-secondary">Отмена</button>
             </div>
@@ -793,14 +795,20 @@
             });
         }
 
-        const quill = new Quill(ed.querySelector('#editor'), { theme: 'snow', placeholder: 'Текст статьи...' });
-        if (isEdit && postToEdit.content) quill.root.innerHTML = postToEdit.content;
+        // toolbar
+        ed.querySelectorAll('.editor-toolbar button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const command = btn.dataset.command;
+                document.execCommand(command, false, null);
+                ed.querySelector('.editor-content').focus();
+            });
+        });
 
         ed.querySelector('#saveBtn').onclick = async () => {
             const title = ed.querySelector('#title').value.trim();
             let hashtags = hashtagsInput ? hashtagsInput.value.trim() : '';
             hashtags = formatHashtags(hashtags);
-            const content = quill.root.innerHTML;
+            const content = ed.querySelector('.editor-content').innerHTML;
             if (!title || !content) { showToast('Заполните заголовок и текст', true); return; }
             try {
                 if (isEdit) await api.updatePost(postToEdit.id, { title, hashtags, content });
@@ -815,7 +823,7 @@
         ed.querySelector('#cancelBtn').onclick = () => ed.remove();
     }
 
-    // ==================== УВЕДОМЛЕНИЯ (без каскадных запросов) ====================
+    // ==================== УВЕДОМЛЕНИЯ (без фоновых HEAD) ====================
     async function showNotifications() {
         showLoader();
         try {
@@ -849,17 +857,17 @@
         }
     }
 
-    let notificationFetchTimer = null;
+    let notifTimer = null;
     async function loadUnreadCount() {
         if (!currentUser) return;
-        // Защита от слишком частых запросов при ошибках
-        if (notificationFetchTimer) return;
-        notificationFetchTimer = setTimeout(() => { notificationFetchTimer = null; }, 5000);
-        try {
-            const { count } = await sb.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).eq('read', false);
-            unreadNotifications = count || 0;
-            updateNotificationBadge();
-        } catch (e) {}
+        if (notifTimer) clearTimeout(notifTimer);
+        notifTimer = setTimeout(async () => {
+            try {
+                const { count } = await sb.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).eq('read', false);
+                unreadNotifications = count || 0;
+                updateNotificationBadge();
+            } catch (e) {}
+        }, 1000);
     }
 
     // ==================== ИНИЦИАЛИЗАЦИЯ ====================
